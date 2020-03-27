@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ndn-service-udp
+  annotations:
+    metallb.universe.tf/allow-shared-ip: ndnkey
+spec:
+  selector:
+    app: ndn-router
+  ports:
+    - name: ndnsixudp
+      protocol: UDP
+      port: 6363
+      targetPort: 6363
+    - name: ndnnineudp
+      protocol: UDP
+      port: 9696
+      targetPort: 9696
+    - name: ndnfiveudp
+      protocol: UDP
+      port: 56363
+      targetPort: 56363
+  type: LoadBalancer
+  loadBalancerIP: 172.42.42.200
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ndn-service-tcp
+  annotations:
+    metallb.universe.tf/allow-shared-ip: ndnkey
+spec:
+  selector:
+    app: ndn-router
+  ports:
+    - name: ndnsixtcp
+      protocol: TCP
+      port: 6363
+      targetPort: 6363
+    - name: ndnninetcp
+      protocol: TCP
+      port: 9696
+      targetPort: 9696
+    - name: ndnfivetcp
+      protocol: TCP
+      port: 56363
+      targetPort: 56363
+  type: LoadBalancer
+  loadBalancerIP: 172.42.42.200
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ndn-router
+  labels:
+    app: ndn-router
+spec:
+  replicas: 3
+  template:
+    metadata:
+      name: ndn-router
+      labels:
+        app: ndn-router
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: ndn-router
+          image: deepnadig/ndn-container:0.2
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 6363
+            - containerPort: 9696
+            - containerPort: 56363
+          volumeMounts:
+          - name: nfsvol
+            mountPath: /data
+      volumes:
+        - name: nfsvol
+          persistentVolumeClaim:
+            claimName: nfs-pvc
+  selector:
+    matchLabels:
+      app: ndn-router

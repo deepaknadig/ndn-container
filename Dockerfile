@@ -30,6 +30,7 @@ RUN apt-get update \
     && cd /root/ \
     && git clone https://github.com/named-data/ndn-cxx \
     && git clone --recursive https://github.com/named-data/NFD \
+    && git clone https://github.com/named-data/ndn-tools.git \
     && cd /root/ndn-cxx \
     && git checkout -b ndn-cxx-0.7.0 \
     && ./waf configure && ./waf && ./waf install && ldconfig \
@@ -40,6 +41,10 @@ RUN apt-get update \
     && cd /root/ && rm -r NFD \
     && cd /usr/local/etc/ndn \
     && cp nfd.conf.sample nfd.conf \
+    && cd /root/ndn-tools \
+    && git checkout -b ndn-tools-0.7 \
+    && ./waf configure && ./waf && ./waf install \
+    && cd /root/ && rm -r ndn-tools \
     && apt-get -y remove --purge $BUILD_DEPS \
     && apt-get -y purge software-properties-common \
     && apt-get -y autoremove \
@@ -47,7 +52,15 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-EXPOSE 6363
+EXPOSE 6363/tcp
+EXPOSE 6363/udp
+EXPOSE 9696/tcp
+EXPOSE 9696/udp
+EXPOSE 56363/tcp
+EXPOSE 56363/udp
 
-ENTRYPOINT ["/usr/local/bin/nfd"]
-CMD ["-c", "/usr/local/etc/ndn/nfd.conf"]
+COPY nfd-start /usr/bin/nfd-start
+RUN chown root:root /usr/bin/nfd-start
+RUN chmod +x /usr/bin/nfd-start
+
+ENTRYPOINT /usr/bin/nfd-start -f
