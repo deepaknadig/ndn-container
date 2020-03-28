@@ -59,6 +59,8 @@ EXPOSE 9696/udp
 EXPOSE 56363/tcp
 EXPOSE 56363/udp
 
+RUN sed -i 's/cs_unsolicited_policy drop-all/cs_unsolicited_policy admit-all/g' /usr/local/etc/ndn/nfd.conf
+
 COPY nfd-start /usr/bin/nfd-start
 RUN chown root:root /usr/bin/nfd-start
 RUN chmod +x /usr/bin/nfd-start
