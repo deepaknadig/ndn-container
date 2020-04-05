@@ -243,24 +243,18 @@ data:
 
   server.conf: |
     ##########
-    # EXAMPLES
-    ##########
     Name=/example/A
     Content=AAAAAAAA
     ##########
     Name=/example/B
     Content=BBBBBBBB
-    SigningInfo=
     ##########
     Name=/example/C
     Content=CCCCCCCC
-    SigningInfo=
     ##########
     Name=/example/D
     Content=DDDDDDDD
-    SigningInfo=
     ##########
     Name=/example/E
     Content=EEEEEEEE
-    SigningInfo=
     ##########
