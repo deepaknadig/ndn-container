@@ -65,7 +65,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: ndn-router
-          image: deepnadig/ndn-container:test
+          image: deepnadig/ndn-container:0.7
           imagePullPolicy: Always
           ports:
             - containerPort: 6363
