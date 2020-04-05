@@ -10,7 +10,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install -y software-properties-common \
     && apt-add-repository -y ppa:named-data/ppa \
-    && apt-get install -y nfd ndn-tools \
+    && apt-get install -y nfd ndn-tools ndn-traffic-generator \
     && apt-get -y purge software-properties-common \
     && apt-get -y autoremove \
     && apt-get -y autoclean \
@@ -24,7 +24,4 @@ EXPOSE 9696/udp
 EXPOSE 56363/tcp
 EXPOSE 56363/udp
 
-COPY nfd-start /usr/bin/nfd-start
-COPY nfd.conf /etc/ndn/nfd.conf
-
-ENTRYPOINT /usr/bin/nfd
+ENTRYPOINT /config/nfd-start -f

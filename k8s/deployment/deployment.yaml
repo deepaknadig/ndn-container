@@ -65,19 +65,30 @@ spec:
       restartPolicy: Always
       containers:
         - name: ndn-router
-          image: deepnadig/ndn-container:0.2
+          image: deepnadig/ndn-container:test
           imagePullPolicy: Always
           ports:
             - containerPort: 6363
             - containerPort: 9696
             - containerPort: 56363
+          securityContext:
+            capabilities:
+              add:
+                - "NET_ADMIN"
+                - "NET_RAW"
           volumeMounts:
-          - name: nfsvol
+          - name: ndn-config
+            mountPath: /config
+          - name: contentstore
             mountPath: /data
       volumes:
-        - name: nfsvol
+        - name: ndn-config
+          configMap:
+            name: ndn-config
+            defaultMode: 0777
+        - name: contentstore
           persistentVolumeClaim:
-            claimName: nfs-pvc
+            claimName: ndn-pvc
   selector:
     matchLabels:
       app: ndn-router

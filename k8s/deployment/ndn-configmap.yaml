@@ -1,0 +1,266 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ndn-config
+data:
+  nfd-start: |
+    #!/bin/bash
+
+    VERSION="0.5.0"
+
+    FOREGROUND=false
+    case "$1" in
+      -h)
+        echo Usage
+        echo $0" [-d]"
+        echo "  Start NFD"
+        echo " -f run in foreground"
+        exit 0
+        ;;
+      -V)
+        echo $VERSION
+        exit 0
+        ;;
+      -f)
+        FOREGROUND=true
+        ;;
+      "") ;; # do nothing
+      *)
+        echo "Unrecognized option $1"
+        exit 1
+        ;;
+    esac
+
+    hasProcess() {
+      local processName=$1
+
+      if pgrep -x $processName >/dev/null
+      then
+        echo $processName
+      fi
+    }
+
+    hasNFD=$(hasProcess nfd)
+
+    if [[ -n $hasNFD ]]
+    then
+      echo 'NFD is already running...'
+      exit 1
+    fi
+
+    if ! ndnsec-get-default &>/dev/null
+    then
+      ndnsec-install-cert /config/router.ndncert
+    fi
+
+    /usr/bin/nfd -c /config/nfd.conf &
+    NFD_PID=$!
+
+    if [ -f /etc/ndn/nfd-init.sh ]; then
+      sleep 2 # post-start is executed just after nfd process starts, but there is no guarantee
+      # that all initialization has been finished
+      . /etc/ndn/nfd-init.sh
+    fi
+
+    if [ -f /etc/ndn/autoconfig.conf ]; then
+      sleep 2 # post-start is executed just after nfd process starts, but there is no guarantee
+      /usr/bin/ndn-autoconfig -d -c "/etc/ndn/autoconfig.conf" &
+    fi
+
+    if [ -f /data/test.txt ]; then
+      sleep 3 # post-start is executed just after nfd process starts, but there is no guarantee
+      ndnputchunks /ndn/test < /data/test.txt &
+    fi
+
+    if [ -f /config/server.conf ]; then
+      sleep 3
+      ndn-traffic-server /config/server.conf
+    fi
+
+    if $FOREGROUND
+    then
+      wait $NFD_PID
+    fi
+
+  nfd.conf: |
+    general
+    {
+    }
+    log
+    {
+      default_level INFO
+    }
+    tables
+    {
+      cs_max_packets 0
+      cs_policy lru
+      cs_unsolicited_policy drop-all
+      strategy_choice
+      {
+        /               /localhost/nfd/strategy/multicast
+        /localhost      /localhost/nfd/strategy/multicast
+        /localhost/nfd  /localhost/nfd/strategy/multicast
+        /ndn            /localhost/nfd/strategy/multicast
+        /ndn/broadcast  /localhost/nfd/strategy/multicast
+      }
+      network_region
+      {
+      }
+    }
+    face_system
+    {
+      general
+      {
+        enable_congestion_marking yes ; set to 'no' to disable congestion marking on supported faces, default 'yes'
+      }
+      unix
+      {
+        path /var/run/nfd.sock ; Unix stream listener path
+      }
+      tcp
+      {
+        listen yes ; set to 'no' to disable TCP listener, default 'yes'
+        port 6363 ; TCP listener port number
+        enable_v4 yes ; set to 'no' to disable IPv4 channels, default 'yes'
+        enable_v6 yes ; set to 'no' to disable IPv6 channels, default 'yes'
+        local
+        {
+          whitelist
+          {
+            subnet 127.0.0.0/8
+            subnet ::1/128
+          }
+          blacklist
+          {
+          }
+        }
+      }
+      udp
+      {
+        listen yes ; set to 'no' to disable UDP listener, default 'yes'
+        port 6363 ; UDP listener port number
+        enable_v4 yes ; set to 'no' to disable IPv4 channels, default 'yes'
+        enable_v6 yes ; set to 'no' to disable IPv6 channels, default 'yes'
+        idle_timeout 600
+        mcast yes ; set to 'no' to disable UDP multicast, default 'yes'
+        mcast_group 224.0.23.170 ; UDP multicast group (IPv4)
+        mcast_port 56363 ; UDP multicast port number (IPv4)
+        mcast_group_v6 ff02::1234 ; UDP multicast group (IPv6)
+        mcast_port_v6 56363 ; UDP multicast port number (IPv6)
+        mcast_ad_hoc no ; set to 'yes' to make all UDP multicast faces "ad hoc", default 'no'
+        whitelist
+        {
+          *
+        }
+        blacklist
+        {
+        }
+      }
+      ether
+      {
+        listen yes ; set to 'no' to disable Ethernet listener, default 'yes'
+        idle_timeout 600
+        mcast yes ; set to 'no' to disable Ethernet multicast, default 'yes'
+        mcast_group 01:00:5E:00:17:AA ; Ethernet multicast group
+        mcast_ad_hoc no ; set to 'yes' to make all Ethernet multicast faces "ad hoc", default 'no'
+        whitelist
+        {
+          *
+        }
+        blacklist
+        {
+        }
+      }
+      websocket
+      {
+        listen yes ; set to 'no' to disable WebSocket listener, default 'yes'
+        port 9696 ; WebSocket listener port number
+        enable_v4 yes ; set to 'no' to disable listening on IPv4 socket, default 'yes'
+        enable_v6 yes ; set to 'no' to disable listening on IPv6 socket, default 'yes'
+      }
+      netdev_bound
+      {
+      }
+    }
+    authorizations
+    {
+      authorize
+      {
+        certfile any ; "any" authorizes command interests signed under any certificate,
+        privileges ; set of privileges granted to this identity
+        {
+          faces
+          fib
+          cs
+          strategy-choice
+        }
+      }
+    }
+    rib
+    {
+      localhost_security
+      {
+        trust-anchor
+        {
+          type any
+        }
+      }
+      prefix_announcement_validation
+      {
+        trust-anchor
+        {
+          type any
+        }
+      }
+      auto_prefix_propagate
+      {
+        cost 15 ; forwarding cost of prefix registered on remote router
+        timeout 10000 ; timeout (in milliseconds) of prefix registration command for propagation
+        refresh_interval 300 ; interval (in seconds) before refreshing the propagation
+        base_retry_wait 50 ; base wait time (in seconds) before retrying propagation
+        max_retry_wait 3600 ; maximum wait time (in seconds) before retrying propagation
+      }
+      readvertise_nlsr no
+    }
+
+
+  router.ndncert: |
+    Bv0CpwclCANuZG4IA0tFWQgI2v59Jd/TEJkIBHNlbGYICf0AAAFxQcRPoBQJGAEC
+    GQQANu6AFf0BJjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAKvykIep
+    Dc9VPH4GXybxhK56SVJV7tAQO0pqO+hhC3bkv9geWJhJIxv5CpnmP6wI9NIHvbkF
+    +tXkslsW6I5BdWem8C8VGzBc8X6+xwAS1AEXXUAf4z53eOvjcYHg5GIu5vao8IBo
+    nRxbWFzSiEKYbf3/EvrDzgz7YchPZdYQU6k2HAsz9/3Eb9O2LwEIuLmicZCtxoiP
+    NDmSb467NKPMWJJpfnnLnir2e7YtS2Maj+/4oJ0WI52h94aX4rNsEwgU+CyNBgp4
+    hPyOR0WW4XciM9ynMqj2tsaa/Ffk9pbZOhwZ1Icdd7pQcLeqELf2dUBgfKRRFqFZ
+    D7Dv8qYSht9Y6XMCAwEAARZFGwEBHBYHFAgDbmRuCANLRVkICNr+fSXf0xCZ/QD9
+    Jv0A/g8xOTcwMDEwMVQwMDAwMDD9AP8PMjA0MDAzMjlUMjAzODM2F/0BACMV4ZrT
+    XbRe/1+ism7lxMwwqaAt2f840yCXqZUGlap3k5/rCgTw57YPaF/sqnrRtQr8uwue
+    2hIdcC1n7yTpnkPZUZNe6tTFtNyeewn1yRB0l4ynLZ1CVzEp9LQT7v3uuRqMHWgb
+    bujEY62WwJwVQg9JUU+jX2x6p2rSF3obb6WlGjW1lc3Z6HogLJuRg8WdBpGYf9tR
+    pOyyNqkpChBpUnodya7sAUW2pdgqXDfbCxDWLNkmpYF46ZmpHdaFN8MsDfO/JXX4
+    hGGM8tG0Fc7W88XVRHth80m8hFs7TAcEOsVemc/1J8Bn2nZpvWjlSz3/yZO/s4wO
+    wdpWVXLTru7QQ1E=
+
+  server.conf: |
+    ##########
+    # EXAMPLES
+    ##########
+    Name=/example/A
+    Content=AAAAAAAA
+    ##########
+    Name=/example/B
+    Content=BBBBBBBB
+    SigningInfo=
+    ##########
+    Name=/example/C
+    Content=CCCCCCCC
+    SigningInfo=
+    ##########
+    Name=/example/D
+    Content=DDDDDDDD
+    SigningInfo=
+    ##########
+    Name=/example/E
+    Content=EEEEEEEE
+    SigningInfo=
+    ##########
